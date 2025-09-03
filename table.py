@@ -224,22 +224,21 @@ def xlsx_to_html(xlsx_path: str) -> str:
 
 
 def main():
-    p = argparse.ArgumentParser(description="Generate Bridge Holdings HTML from an .xlsx file.")
-    p.add_argument("xlsx", help="Path to the input .xlsx file")
-    p.add_argument("--out", "-o", help="Write output HTML to this file (defaults to stdout)")
-    args = p.parse_args()
+  p = argparse.ArgumentParser(description="Generate Bridge Holdings HTML from an .xlsx file.")
+  p.add_argument("input", help="Base name of the input file (without extension)")
+  args = p.parse_args()
 
-    try:
-        html = xlsx_to_html(args.xlsx)
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+  xlsx_path = args.input + ".xlsx"
+  html_path = args.input + ".html"
 
-    if args.out:
-        with open(args.out, "w", encoding="utf-8") as f:
-            f.write(html)
-    else:
-        sys.stdout.write(html)
+  try:
+    html = xlsx_to_html(xlsx_path)
+  except Exception as e:
+    print(f"Error: {e}", file=sys.stderr)
+    sys.exit(1)
+
+  with open(html_path, "w", encoding="utf-8") as f:
+    f.write(html)
 
 
 if __name__ == "__main__":
