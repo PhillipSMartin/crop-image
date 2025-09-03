@@ -1,2 +1,4 @@
 html2image
 Pillow
+pandas
+openpyxl
