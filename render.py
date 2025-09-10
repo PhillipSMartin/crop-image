@@ -4,7 +4,9 @@ from PIL import Image
 import os
 import sys
 
-def render_and_crop_html(html_path, output_img_path, new_width=184, new_height=346):
+import argparse
+
+def render_and_crop_html(html_path, output_img_path, new_width=184, new_height=346, left_crop=None):
     hti = Html2Image()
     hti.screenshot(
         html_file=html_path,
@@ -13,8 +15,12 @@ def render_and_crop_html(html_path, output_img_path, new_width=184, new_height=3
     )
     with Image.open('rendered.png') as img:
         width, height = img.size
-        left = max((width - new_width) // 2, 0)
-        right = left + new_width
+        if left_crop is not None:
+            left = max(left_crop, 0)
+            right = left + new_width
+        else:
+            left = max((width - new_width) // 2, 0)
+            right = left + new_width
         top = 0
         bottom = min(new_height, height)
         cropped = img.crop((left, top, right, bottom))
@@ -35,7 +41,7 @@ def parse_args(argc, argv):
             sys.exit(1)
     else:
         new_width = 184
-    if argc == 4:
+    if argc >= 4:
         try:
             new_height = int(argv[3])
         except ValueError:
@@ -43,24 +49,42 @@ def parse_args(argc, argv):
             sys.exit(1)
     else:
         new_height = 346
-    return new_width, new_height
+    if argc == 5:
+        try:
+            left_crop = int(argv[4])
+        except ValueError:
+            print("Left crop must be an integer.")
+            sys.exit(1)
+    else:
+        left_crop = None
+    return new_width, new_height, left_crop
 
-def process_directory(directory, new_width=184, new_height=346):
+def process_directory(directory, new_width=184, new_height=346, left_crop=None, force=False):
     for filename in os.listdir(directory):
         if filename.endswith('.html'):
             html_path = os.path.join(directory, filename)
             output_img_path = os.path.join(directory, filename[:-5] + '.png')
+            if not force and os.path.exists(output_img_path):
+                print(f"Skipping {html_path} (output exists)")
+                continue
             print(f"Processing {html_path} -> {output_img_path}")
-            render_and_crop_html(html_path, output_img_path, new_width, new_height)
+            render_and_crop_html(html_path, output_img_path, new_width, new_height, left_crop)
 
 if __name__ == "__main__":
-    argc = len(sys.argv)
-    if argc < 2 or argc > 4:
-        print("Usage: python render.py <directory> [width] [height]")
-        sys.exit(1)
-    directory = sys.argv[1]
+    parser = argparse.ArgumentParser(description="Render and crop HTML files in a directory.")
+    parser.add_argument("directory", help="Directory containing .html files")
+    parser.add_argument("width", nargs="?", type=int, default=184, help="Width of crop")
+    parser.add_argument("height", nargs="?", type=int, default=346, help="Height of crop")
+    parser.add_argument("left_crop", nargs="?", type=int, help="Crop this many pixels from the left (optional)")
+    parser.add_argument("-f", "--force", action="store_true", help="Force overwrite of existing .png files")
+    args = parser.parse_args()
+
+    directory = args.directory
     if not os.path.isdir(directory):
         print(f"Error: {directory} is not a directory.")
         sys.exit(1)
-    new_width, new_height = parse_args(argc, sys.argv)
-    process_directory(directory, new_width, new_height)
+    new_width = args.width
+    new_height = args.height
+    left_crop = args.left_crop
+    force = args.force
+    process_directory(directory, new_width, new_height, left_crop, force)
