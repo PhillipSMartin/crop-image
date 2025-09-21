@@ -1,4 +1,5 @@
 html2image
 Pillow
+selenium
 pandas
 openpyxl

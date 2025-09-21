@@ -1,28 +1,66 @@
-
-from html2image import Html2Image
-from PIL import Image
 import os
 import sys
-
 import argparse
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from PIL import Image
+import time
 
-def render_and_crop_html(html_path, output_img_path, new_width=184, new_height=346, left_crop=None):
-    hti = Html2Image()
-    hti.screenshot(
-        html_file=html_path,
-        save_as='rendered.png',
-        size=(800, 600)
-    )
-    with Image.open('rendered.png') as img:
-        width, height = img.size
-        if left_crop is not None:
-            left = max(left_crop, 0)
-            right = left + new_width
-        else:
-            left = max((width - new_width) // 2, 0)
-            right = left + new_width
-        top = 0
-        bottom = min(new_height, height)
+def get_union_bbox(driver, margin=20):
+    # Get bounding boxes of all visible elements except those with class 'bridge-diagram'
+    rects = driver.execute_script('''
+        var rects = [];
+        function isVisible(elem) {
+            var style = window.getComputedStyle(elem);
+            return style.display !== 'none' && style.visibility !== 'hidden' && elem.offsetWidth > 0 && elem.offsetHeight > 0;
+        }
+        var all = document.body.getElementsByTagName('*');
+        for (var i = 0; i < all.length; i++) {
+            var elem = all[i];
+            if (isVisible(elem) && !(elem.classList && elem.classList.contains('bridge-diagram'))) {
+                var r = elem.getBoundingClientRect();
+                rects.push({left: r.left, top: r.top, right: r.right, bottom: r.bottom});
+            }
+        }
+        return rects;
+    ''')
+    if not rects:
+        # fallback to body
+        rect = driver.execute_script('''
+            var r = document.body.getBoundingClientRect();
+            return {left: r.left, top: r.top, right: r.right, bottom: r.bottom};
+        ''')
+        rects = [rect]
+    left = min(r['left'] for r in rects)
+    top = min(r['top'] for r in rects)
+    right = max(r['right'] for r in rects)
+    bottom = max(r['bottom'] for r in rects)
+    # Add margin
+    left = max(int(left) - margin, 0)
+    top = max(int(top) - margin, 0)
+    right = int(right) + margin
+    bottom = int(bottom) + margin
+    return left, top, right, bottom
+
+def render_and_crop_html_selenium(html_path, output_img_path, margin=20):
+    chrome_options = Options()
+    chrome_options.add_argument('--headless')
+    chrome_options.add_argument('--disable-gpu')
+    chrome_options.add_argument('--window-size=1920,1080')
+    chrome_options.add_argument('--no-sandbox')
+    driver = webdriver.Chrome(options=chrome_options)
+
+    abs_html_path = os.path.abspath(html_path)
+    driver.get('file://' + abs_html_path)
+    time.sleep(1)
+
+    screenshot_path = 'selenium_rendered.png'
+    driver.save_screenshot(screenshot_path)
+
+    left, top, right, bottom = get_union_bbox(driver, margin)
+    driver.quit()
+
+    with Image.open(screenshot_path) as img:
         cropped = img.crop((left, top, right, bottom))
         if cropped.mode in ("RGBA", "LA"):
             background = Image.new("RGB", cropped.size, (255, 255, 255))
@@ -30,36 +68,9 @@ def render_and_crop_html(html_path, output_img_path, new_width=184, new_height=3
             background.save(output_img_path)
         else:
             cropped.save(output_img_path)
-    os.remove('rendered.png')
+    os.remove(screenshot_path)
 
-def parse_args(argc, argv):
-    if argc >= 3:
-        try:
-            new_width = int(argv[2])
-        except ValueError:
-            print("Width must be an integer.")
-            sys.exit(1)
-    else:
-        new_width = 184
-    if argc >= 4:
-        try:
-            new_height = int(argv[3])
-        except ValueError:
-            print("Height must be an integer.")
-            sys.exit(1)
-    else:
-        new_height = 346
-    if argc == 5:
-        try:
-            left_crop = int(argv[4])
-        except ValueError:
-            print("Left crop must be an integer.")
-            sys.exit(1)
-    else:
-        left_crop = None
-    return new_width, new_height, left_crop
-
-def process_directory(directory, new_width=184, new_height=346, left_crop=None, force=False):
+def process_directory_selenium(directory, margin=20, force=False):
     for filename in os.listdir(directory):
         if filename.endswith('.html'):
             html_path = os.path.join(directory, filename)
@@ -68,23 +79,19 @@ def process_directory(directory, new_width=184, new_height=346, left_crop=None, 
                 print(f"Skipping {html_path} (output exists)")
                 continue
             print(f"Processing {html_path} -> {output_img_path}")
-            render_and_crop_html(html_path, output_img_path, new_width, new_height, left_crop)
+            render_and_crop_html_selenium(html_path, output_img_path, margin)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Render and crop HTML files in a directory.")
+    parser = argparse.ArgumentParser(description="Batch render and crop HTML files in a directory using Selenium.")
     parser.add_argument("directory", help="Directory containing .html files")
-    parser.add_argument("width", nargs="?", type=int, default=184, help="Width of crop")
-    parser.add_argument("height", nargs="?", type=int, default=346, help="Height of crop")
-    parser.add_argument("left_crop", nargs="?", type=int, help="Crop this many pixels from the left (optional)")
+    parser.add_argument("-m", "--margin", type=int, default=20, help="Margin in pixels around detected content")
     parser.add_argument("-f", "--force", action="store_true", help="Force overwrite of existing .png files")
     args = parser.parse_args()
 
     directory = args.directory
+    margin = args.margin
+    force = args.force
     if not os.path.isdir(directory):
         print(f"Error: {directory} is not a directory.")
         sys.exit(1)
-    new_width = args.width
-    new_height = args.height
-    left_crop = args.left_crop
-    force = args.force
-    process_directory(directory, new_width, new_height, left_crop, force)
+    process_directory_selenium(directory, margin, force)
