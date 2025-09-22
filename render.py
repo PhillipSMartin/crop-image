@@ -42,14 +42,7 @@ def get_union_bbox(driver, margin=20):
     bottom = int(bottom) + margin
     return left, top, right, bottom
 
-def render_and_crop_html_selenium(html_path, output_img_path, margin=20):
-    chrome_options = Options()
-    chrome_options.add_argument('--headless')
-    chrome_options.add_argument('--disable-gpu')
-    chrome_options.add_argument('--window-size=1920,1080')
-    chrome_options.add_argument('--no-sandbox')
-    driver = webdriver.Chrome(options=chrome_options)
-
+def render_and_crop_html_selenium(driver, html_path, output_img_path, margin=20):
     abs_html_path = os.path.abspath(html_path)
     driver.get('file://' + abs_html_path)
     time.sleep(1)
@@ -58,7 +51,6 @@ def render_and_crop_html_selenium(html_path, output_img_path, margin=20):
     driver.save_screenshot(screenshot_path)
 
     left, top, right, bottom = get_union_bbox(driver, margin)
-    driver.quit()
 
     with Image.open(screenshot_path) as img:
         cropped = img.crop((left, top, right, bottom))
@@ -71,15 +63,24 @@ def render_and_crop_html_selenium(html_path, output_img_path, margin=20):
     os.remove(screenshot_path)
 
 def process_directory_selenium(directory, margin=20, force=False):
-    for filename in os.listdir(directory):
-        if filename.endswith('.html'):
-            html_path = os.path.join(directory, filename)
-            output_img_path = os.path.join(directory, filename[:-5] + '.png')
-            if not force and os.path.exists(output_img_path):
-                print(f"Skipping {html_path} (output exists)")
-                continue
-            print(f"Processing {html_path} -> {output_img_path}")
-            render_and_crop_html_selenium(html_path, output_img_path, margin)
+    chrome_options = Options()
+    chrome_options.add_argument('--headless')
+    chrome_options.add_argument('--disable-gpu')
+    chrome_options.add_argument('--window-size=1920,1080')
+    chrome_options.add_argument('--no-sandbox')
+    driver = webdriver.Chrome(options=chrome_options)
+    try:
+        for filename in os.listdir(directory):
+            if filename.endswith('.html'):
+                html_path = os.path.join(directory, filename)
+                output_img_path = os.path.join(directory, filename[:-5] + '.png')
+                if not force and os.path.exists(output_img_path):
+                    print(f"Skipping {html_path} (output exists)")
+                    continue
+                print(f"Processing {html_path} -> {output_img_path}")
+                render_and_crop_html_selenium(driver, html_path, output_img_path, margin)
+    finally:
+        driver.quit()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Batch render and crop HTML files in a directory using Selenium.")
