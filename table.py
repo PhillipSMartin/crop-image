@@ -57,14 +57,22 @@ def _detect_last_used_col(df: pd.DataFrame) -> int:
     return max(indices)
 
 
+
 def _format_cell(v) -> str:
-    # Render numbers cleanly (e.g., 3.0 -> 3)
-    try:
-        if isinstance(v, float) and v.is_integer():
-            return str(int(v))
-    except Exception:
-        pass
-    return str(v)
+  # Render numbers cleanly (e.g., 3.0 -> 3)
+  try:
+    if isinstance(v, float) and v.is_integer():
+      v = str(int(v))
+    else:
+      v = str(v)
+  except Exception:
+    v = str(v)
+  # Replace *S, *H, *D, *C with suit pips
+  v = v.replace('*S', '♠')
+  v = v.replace('*C', '♣')
+  v = v.replace('*H', '<span style="color: #c01616;">♥</span>')
+  v = v.replace('*D', '<span style="color: #c01616;">♦</span>')
+  return v
 
 
 def xlsx_to_html(xlsx_path: str) -> str:
@@ -81,8 +89,13 @@ def xlsx_to_html(xlsx_path: str) -> str:
     headers = ["" if pd.isna(x) else str(x) for x in df.iloc[1, : last_col + 1].tolist()]
     ncols = len(headers)
 
-    # Data rows (rows 3..N)
-    body_df = df.iloc[2:, : last_col + 1].fillna("")
+    # Justification codes from row 3 (index 2)
+    just_codes = [str(x).strip().lower() if pd.notna(x) else 'l' for x in df.iloc[2, : last_col + 1].tolist()]
+    just_map = {'l': 'left', 'r': 'right', 'c': 'center'}
+    justs = [just_map.get(code, 'left') for code in just_codes]
+
+    # Data rows (rows 4..N)
+    body_df = df.iloc[3:, : last_col + 1].fillna("")
     rows = body_df.values.tolist()
 
     # Build dynamic CSS for nowrap depending on column count
@@ -102,17 +115,19 @@ def xlsx_to_html(xlsx_path: str) -> str:
     # Generate <colgroup>
     colgroup = "\n".join(["        <col />" for _ in range(ncols)])
 
-    # Generate thead
-    thead_cells = "".join(f"<th>{html_escape(h)}</th>" for h in headers)
+    # Generate thead (always center-justified)
+    thead_cells = "".join(f"<th style='text-align:center'>{html_escape(h)}</th>" for h in headers)
     thead_html = f"""
       <thead>
         <tr>{thead_cells}</tr>
       </thead>"""
 
-    # Generate tbody
+    # Generate tbody with per-column justification
     tbody_rows = []
     for r in rows:
-        tds = "".join(f"<td>{html_escape(_format_cell(v))}</td>" for v in r)
+        tds = "".join(
+            f"<td style='text-align:{justs[i]}'>{html_escape(_format_cell(v))}</td>" for i, v in enumerate(r)
+        )
         tbody_rows.append(f"        <tr>{tds}</tr>")
     tbody_html = "\n".join(tbody_rows) if tbody_rows else "        <!-- No data rows -->"
 
@@ -146,7 +161,7 @@ def xlsx_to_html(xlsx_path: str) -> str:
       padding: 6px 10px; 
       background: transparent; 
     }}
-    .bridge-holdings thead th {{ text-align: left; white-space: nowrap; }}
+  .bridge-holdings thead th {{ text-align: center; white-space: nowrap; }}
 
     /* Conditional nowrap for columns (depends on # of columns in the sheet) */
     {nowrap_css}
