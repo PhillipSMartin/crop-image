@@ -67,6 +67,10 @@ def _format_cell(v) -> str:
       v = str(v)
   except Exception:
     v = str(v)
+
+  # Escape HTML first, before adding our intentional HTML tags
+  v = html_escape(v)
+
   # Replace *S, *H, *D, *C with suit pips
   v = v.replace('*S', '♠')
   v = v.replace('*C', '♣')
@@ -126,7 +130,7 @@ def xlsx_to_html(xlsx_path: str) -> str:
     tbody_rows = []
     for r in rows:
         tds = "".join(
-            f"<td style='text-align:{justs[i]}'>{html_escape(_format_cell(v))}</td>" for i, v in enumerate(r)
+            f"<td style='text-align:{justs[i]}'>{_format_cell(v)}</td>" for i, v in enumerate(r)
         )
         tbody_rows.append(f"        <tr>{tds}</tr>")
     tbody_html = "\n".join(tbody_rows) if tbody_rows else "        <!-- No data rows -->"
