@@ -68,6 +68,7 @@ def process_directory_selenium(directory, margin=20, force=False):
     chrome_options.add_argument('--disable-gpu')
     chrome_options.add_argument('--window-size=1920,1080')
     chrome_options.add_argument('--no-sandbox')
+    chrome_options.add_argument('--log-level=3')
     driver = webdriver.Chrome(options=chrome_options)
     try:
         for filename in os.listdir(directory):
