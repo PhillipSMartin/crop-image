@@ -1,6 +1,7 @@
 import os
 import sys
 import argparse
+from pathlib import Path
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from PIL import Image
@@ -44,7 +45,7 @@ def get_union_bbox(driver, margin=20):
 
 def render_and_crop_html_selenium(driver, html_path, output_img_path, margin=20):
     abs_html_path = os.path.abspath(html_path)
-    driver.get('file://' + abs_html_path)
+    driver.get(Path(abs_html_path).as_uri())
     time.sleep(1)
 
     screenshot_path = 'selenium_rendered.png'
@@ -69,6 +70,7 @@ def process_directory_selenium(directory, margin=20, force=False):
     chrome_options.add_argument('--window-size=1920,1080')
     chrome_options.add_argument('--no-sandbox')
     chrome_options.add_argument('--log-level=3')
+    chrome_options.add_argument('--allow-file-access-from-files')
     driver = webdriver.Chrome(options=chrome_options)
     try:
         for filename in os.listdir(directory):
